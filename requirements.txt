@@ -1,3 +1,5 @@
+gunicorn
+flask
 flask
 face_recognition
 gunicorn
