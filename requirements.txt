@@ -1,1 +1,4 @@
-
+flask
+face_recognition
+gunicorn
+numpy
