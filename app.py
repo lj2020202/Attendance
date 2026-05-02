@@ -63,36 +63,49 @@ def mark_attendance(name):
     conn = sqlite3.connect("attendance.db")
     c = conn.cursor()
 
+    # Get last record of this person
     c.execute("""
         SELECT * FROM attendance 
         WHERE name=? 
-        ORDER BY id DESC LIMIT 1
+        ORDER BY id DESC 
+        LIMIT 1
     """, (name,))
 
     last = c.fetchone()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
+    # -----------------------------
+    # COOLDOWN CHECK (5 seconds)
+    # -----------------------------
+    if last:
+        last_time = datetime.strptime(last[2], "%Y-%m-%d %H:%M:%S")
+        diff = (now - last_time).seconds
+
+        if diff < 5:
+            conn.close()
+            return "Already recorded (wait 5s)"
+
+    # -----------------------------
+    # IN / OUT LOGIC
+    # -----------------------------
     if last is None or last[3] == "OUT":
-        c.execute("INSERT INTO attendance (name, time, type) VALUES (?, ?, ?)",
-                  (name, now, "IN"))
+        c.execute(
+            "INSERT INTO attendance (name, time, type) VALUES (?, ?, ?)",
+            (name, now_str, "IN")
+        )
         conn.commit()
         conn.close()
         return "Time IN recorded"
 
     else:
-        c.execute("INSERT INTO attendance (name, time, type) VALUES (?, ?, ?)",
-                  (name, now, "OUT"))
+        c.execute(
+            "INSERT INTO attendance (name, time, type) VALUES (?, ?, ?)",
+            (name, now_str, "OUT")
+        )
         conn.commit()
         conn.close()
         return "Time OUT recorded"
-if last:
-    last_time = datetime.strptime(last[2], "%Y-%m-%d %H:%M:%S")
-    diff = (now_time - last_time).seconds
-
-    if diff < 5:
-        return "Already recorded (wait 5s)"
-        
-
 # ----------------------------
 # API ROUTE
 # ----------------------------
