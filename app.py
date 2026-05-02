@@ -71,13 +71,7 @@ def mark_attendance(name):
 
     last = c.fetchone()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-if last:
-    last_time = datetime.strptime(last[2], "%Y-%m-%d %H:%M:%S")
-    diff = (now_time - last_time).seconds
 
-    if diff < 5:
-        return "Already recorded (wait 5s)"
-        
     if last is None or last[3] == "OUT":
         c.execute("INSERT INTO attendance (name, time, type) VALUES (?, ?, ?)",
                   (name, now, "IN"))
@@ -91,6 +85,13 @@ if last:
         conn.commit()
         conn.close()
         return "Time OUT recorded"
+if last:
+    last_time = datetime.strptime(last[2], "%Y-%m-%d %H:%M:%S")
+    diff = (now_time - last_time).seconds
+
+    if diff < 5:
+        return "Already recorded (wait 5s)"
+        
 
 # ----------------------------
 # API ROUTE
