@@ -265,3 +265,77 @@ def register():
         "status": "success",
         "message": f"{name} registered successfully"
     }
+
+@app.route('/register-page')
+def register_page():
+    return """
+    <html>
+    <head>
+        <title>Register Face</title>
+        <style>
+            body { font-family: Arial; text-align: center; }
+            video, canvas { border: 1px solid black; }
+            input, button { padding: 10px; margin: 10px; }
+        </style>
+    </head>
+    <body>
+
+        <h2>Face Registration</h2>
+
+        <input type="text" id="name" placeholder="Enter name" /><br>
+
+        <video id="video" width="300" height="220" autoplay></video><br>
+
+        <button onclick="capture()">Capture & Register</button>
+
+        <p id="result"></p>
+
+        <canvas id="canvas" width="300" height="220" style="display:none;"></canvas>
+
+        <script>
+            const video = document.getElementById('video');
+
+            // Access camera
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                });
+
+            function capture() {
+                const name = document.getElementById("name").value;
+
+                if (!name) {
+                    alert("Enter name first");
+                    return;
+                }
+
+                const canvas = document.getElementById('canvas');
+                const context = canvas.getContext('2d');
+
+                context.drawImage(video, 0, 0, 300, 220);
+
+                const image = canvas.toDataURL("image/jpeg");
+
+                fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        image: image
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("result").innerText = data.message;
+                })
+                .catch(err => {
+                    document.getElementById("result").innerText = "Error registering";
+                });
+            }
+        </script>
+
+    </body>
+    </html>
+    """
