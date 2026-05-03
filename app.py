@@ -178,3 +178,11 @@ def export_excel():
         "status": "success",
         "file": "/download"
     })
+from flask import send_file
+
+@app.route('/download', methods=['GET'])
+def download():
+    return send_file(
+        "attendance.xlsx",
+        as_attachment=True
+    )
