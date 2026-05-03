@@ -3,3 +3,4 @@ flask-cors
 face-recognition
 opencv-python-headless
 numpy
+Pillow
