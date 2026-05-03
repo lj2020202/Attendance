@@ -1,5 +1,0 @@
-[phases.setup]
-nixPkgs = ["...", "libX11", "libXext", "libXrender", "libice", "libsm", "glib"]
-
-[phases.build]
-cmds = ["pip install -r requirements.txt"]
