@@ -235,30 +235,6 @@ def admin():
 
     return html
 
-@app.route('/admin', methods=['GET'])
-def admin():
-    password = request.args.get("pass")
-
-    if password != "1234":
-        return "Unauthorized", 403
-
-    conn = sqlite3.connect("attendance.db")
-    c = conn.cursor()
-
-    c.execute("SELECT name, time, type FROM attendance ORDER BY id DESC")
-    rows = c.fetchall()
-    conn.close()
-
-    html = "<h2>Attendance Dashboard</h2>"
-    html += "<table border='1'><tr><th>Name</th><th>Time</th><th>Type</th></tr>"
-
-    for r in rows:
-        html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>"
-
-    html += "</table>"
-
-    return html
-
 @app.route('/register', methods=['POST'])
 def register():
     data = request.json
