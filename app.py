@@ -152,6 +152,33 @@ def verify():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
 
+@app.route('/export', methods=['GET'])
+def export_excel():
+    conn = sqlite3.connect("attendance.db")
+    c = conn.cursor()
+
+    c.execute("SELECT name, time, type FROM attendance")
+    data = c.fetchall()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Attendance"
+
+    # Header
+    ws.append(["Name", "Time", "Type"])
+
+    # Data rows
+    for row in data:
+        ws.append(row)
+
+    file_path = "attendance.xlsx"
+    wb.save(file_path)
+
+    return jsonify({
+        "status": "success",
+        "file": "/download"
+    })
 from flask import send_file
 
 @app.route('/download', methods=['GET'])
