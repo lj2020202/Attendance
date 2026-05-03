@@ -5,6 +5,10 @@ import base64
 import sqlite3
 from datetime import datetime
 from openpyxl import Workbook
+from flask import request
+import os
+import base64
+from flask import request
 
 app = Flask(__name__)
 
@@ -187,3 +191,101 @@ def download():
         "attendance.xlsx",
         as_attachment=True
     )
+
+@app.route('/admin', methods=['GET'])
+def admin():
+    conn = sqlite3.connect("attendance.db")
+    c = conn.cursor()
+
+    c.execute("SELECT name, time, type FROM attendance ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+
+    html = """
+    <html>
+    <head>
+        <title>Admin Dashboard</title>
+        <style>
+            body { font-family: Arial; padding: 20px; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ccc; padding: 8px; }
+            th { background: #333; color: white; }
+        </style>
+    </head>
+    <body>
+        <h2>Attendance Dashboard</h2>
+        <a href="/export">Export Excel</a>
+        <br><br>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Time</th>
+                <th>Type</th>
+            </tr>
+    """
+
+    for r in rows:
+        html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>"
+
+    html += """
+        </table>
+    </body>
+    </html>
+    """
+
+    return html
+
+@app.route('/admin', methods=['GET'])
+def admin():
+    password = request.args.get("pass")
+
+    if password != "1234":
+        return "Unauthorized", 403
+
+    conn = sqlite3.connect("attendance.db")
+    c = conn.cursor()
+
+    c.execute("SELECT name, time, type FROM attendance ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+
+    html = "<h2>Attendance Dashboard</h2>"
+    html += "<table border='1'><tr><th>Name</th><th>Time</th><th>Type</th></tr>"
+
+    for r in rows:
+        html += f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>"
+
+    html += "</table>"
+
+    return html
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.json
+
+    name = data['name']
+    image_data = data['image']
+
+    # Decode image
+    img_bytes = base64.b64decode(image_data.split(',')[1])
+
+    # Save into known_faces folder
+    folder = "known_faces"
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    file_path = os.path.join(folder, f"{name}.jpg")
+
+    with open(file_path, "wb") as f:
+        f.write(img_bytes)
+
+    # Reload faces
+    global known_encodings, known_names
+    known_encodings = []
+    known_names = []
+    load_faces()
+
+    return {
+        "status": "success",
+        "message": f"{name} registered successfully"
+    }
