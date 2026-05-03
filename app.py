@@ -4,58 +4,78 @@ import face_recognition
 import numpy as np
 import base64
 import cv2
+import io
+from PIL import Image
 
 app = Flask(__name__)
 CORS(app)
 
-# --- ROUTE 1: FOR REGISTRATION ---
+def process_base64_image(base64_string):
+    # Remove the header if present (e.g., "data:image/jpeg;base64,")
+    if "," in base64_string:
+        base64_string = base64_string.split(",")[1]
+    
+    # Decode base64 to bytes
+    img_data = base64.b64decode(base64_string)
+    
+    # Use PIL to open the image - this handles many format issues automatically
+    img = Image.open(io.BytesIO(img_data))
+    
+    # CRITICAL: Convert to RGB (removes Alpha channels or Grayscale issues)
+    img = img.convert('RGB')
+    
+    # Convert back to a format OpenCV/Numpy can use
+    return np.array(img)
+
 @app.route('/get_face_encoding', methods=['POST'])
 def get_face_encoding():
     try:
         data = request.json
-        header, encoded = data['image'].split(",", 1)
-        image_bytes = base64.b64decode(encoded)
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        if 'image' not in data:
+            return jsonify({"status": "error", "message": "No image provided"}), 400
 
+        # Process and fix the image format
+        rgb_img = process_base64_image(data['image'])
+        
+        # Detect faces
         face_encodings = face_recognition.face_encodings(rgb_img)
 
         if len(face_encodings) > 0:
-            return jsonify({"status": "success", "encoding": face_encodings[0].tolist()})
-        return jsonify({"status": "error", "message": "No face detected"}), 400
+            return jsonify({
+                "status": "success", 
+                "encoding": face_encodings[0].tolist()
+            })
+        else:
+            return jsonify({"status": "error", "message": "No face detected. Please face the camera clearly."}), 400
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# --- ROUTE 2: FOR VERIFICATION (New!) ---
 @app.route('/compare_faces', methods=['POST'])
 def compare_faces():
     try:
         data = request.json
-        # 1. Decode the live photo from the webcam
-        header, encoded = data['live_image'].split(",", 1)
-        live_img_bytes = base64.b64decode(encoded)
-        nparr = np.frombuffer(live_img_bytes, np.uint8)
-        live_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        live_rgb = cv2.cvtColor(live_img, cv2.COLOR_BGR2RGB)
+        if 'live_image' not in data or 'known_faces' not in data:
+            return jsonify({"status": "error", "message": "Missing data"}), 400
+
+        # Process live image
+        live_rgb = process_base64_image(data['live_image'])
+        live_encodings = face_recognition.face_encodings(live_rgb)
         
-        live_encoding = face_recognition.face_encodings(live_rgb)
-        if not live_encoding:
+        if not live_encodings:
             return jsonify({"status": "error", "message": "No face in live photo"}), 400
 
-        # 2. Get the list of known faces sent from PHP
-        known_faces = data['known_faces'] # List of { "name": "...", "encoding": [...] }
+        known_faces = data['known_faces']
         
         for person in known_faces:
             stored_encoding = np.array(person['encoding'])
-            # Compare live face to this stored face
-            # tolerance 0.6 is standard; lower (0.4) is stricter
-            match = face_recognition.compare_faces([stored_encoding], live_encoding[0], tolerance=0.6)
+            # Compare
+            match = face_recognition.compare_faces([stored_encoding], live_encodings[0], tolerance=0.6)
             
             if match[0]:
                 return jsonify({"status": "success", "match": person['name']})
 
-        return jsonify({"status": "success", "match": None}) # No match found
+        return jsonify({"status": "success", "match": None})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
