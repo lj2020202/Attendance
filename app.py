@@ -1,105 +1,52 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import face_recognition
-import os
+import numpy as np
 import base64
+import cv2
 
 app = Flask(__name__)
+# CORS allows your InfinityFree website to talk to this Railway script
+CORS(app)
 
-known_encodings = []
-known_names = []
+@app.route('/get_face_encoding', methods=['POST'])
+def get_face_encoding():
+    try:
+        # Get the JSON data sent from the browser
+        data = request.json
+        if 'image' not in data:
+            return jsonify({"error": "No image data provided"}), 400
 
-# ---------------- LOAD FACES ----------------
-def load_faces():
-    global known_encodings, known_names
+        # The image comes as a Base64 string (data:image/jpeg;base64,...)
+        # We need to strip the header and decode it
+        header, encoded = data['image'].split(",", 1)
+        image_bytes = base64.b64decode(encoded)
+        
+        # Convert bytes to an OpenCV image format
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        # Convert BGR (OpenCV) to RGB (face_recognition)
+        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    known_encodings = []
-    known_names = []
+        # Detect faces and get encodings (the "fingerprint" of the face)
+        face_encodings = face_recognition.face_encodings(rgb_img)
 
-    folder = "known_faces"
-
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-    for file in os.listdir(folder):
-        if file.endswith((".jpg", ".png", ".jpeg")):
-            path = os.path.join(folder, file)
-
-            try:
-                img = face_recognition.load_image_file(path)
-                enc = face_recognition.face_encodings(img)
-
-                if enc:
-                    known_encodings.append(enc[0])
-                    known_names.append(file.split('.')[0])
-
-            except:
-                print("Bad image:", file)
-
-load_faces()
-
-# ---------------- VERIFY ----------------
-@app.route('/verify', methods=['POST'])
-def verify():
-    data = request.json
-    image_data = data['image']
-
-    img_bytes = base64.b64decode(image_data.split(',')[1])
-
-    with open("temp.jpg", "wb") as f:
-        f.write(img_bytes)
-
-    unknown = face_recognition.load_image_file("temp.jpg")
-    encodings = face_recognition.face_encodings(unknown)
-
-    if not encodings:
-        return jsonify({"status": "no_face"})
-
-    for encoding in encodings:
-        matches = face_recognition.compare_faces(known_encodings, encoding)
-
-        if True in matches:
-            index = matches.index(True)
-            name = known_names[index]
-
+        if len(face_encodings) > 0:
+            # We take the first face detected and convert the numpy array to a standard list
+            encoding_list = face_encodings[0].tolist()
             return jsonify({
-                "status": "matched",
-                "name": name
+                "status": "success",
+                "encoding": encoding_list
             })
+        else:
+            return jsonify({"status": "error", "message": "No face detected in the image"}), 400
 
-    return jsonify({
-        "status": "not_found"
-    })
-
-# ---------------- REGISTER ----------------
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.json
-
-    name = data['name']
-    image_data = data['image']
-
-    img_bytes = base64.b64decode(image_data.split(',')[1])
-
-    folder = "known_faces"
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-    file_path = os.path.join(folder, f"{name}.jpg")
-
-    with open(file_path, "wb") as f:
-        f.write(img_bytes)
-
-    load_faces()
-
-    return {
-        "status": "success",
-        "message": f"{name} registered"
-    }
-
-# ---------------- REGISTER PAGE ----------------
-@app.route('/register-page')
-def register_page():
-    return open("register.html").read()
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    # Railway provides a port via environment variables
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
