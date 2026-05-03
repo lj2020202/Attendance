@@ -150,3 +150,12 @@ def verify():
 # ----------------------------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
+
+from flask import send_file
+
+@app.route('/download', methods=['GET'])
+def download():
+    return send_file(
+        "attendance.xlsx",
+        as_attachment=True
+    )
