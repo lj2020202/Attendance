@@ -2,3 +2,4 @@ flask
 gunicorn
 numpy
 face_recognition
+openpyxl
