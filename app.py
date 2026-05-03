@@ -4,52 +4,43 @@ import face_recognition
 import numpy as np
 import base64
 import io
+import cv2
 from PIL import Image
 
 app = Flask(__name__)
 CORS(app)
 
+def is_real_person(img_array):
+    # Liveness check: Laplacian variance
+    # Real faces have a specific range of texture. 
+    # Photos/Screens are often too sharp or too blurry.
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    score = cv2.Laplacian(gray, cv2.CV_64F).var()
+    # If score is very low, it's likely a flat screen/photo
+    if score < 50: 
+        return False
+    return True
+
 def process_base64_image(base64_string):
-    # Remove the header (e.g., "data:image/jpeg;base64,")
     if "," in base64_string:
         base64_string = base64_string.split(",")[1]
-    
-    # Decode base64 to bytes
     img_data = base64.b64decode(base64_string)
-    
-    # Open with PIL
-    img = Image.open(io.BytesIO(img_data))
-    
-    # 1. Force convert to RGB (removes transparency/grayscale)
-    img = img.convert('RGB')
-    
-    # 2. Convert to Numpy Array
-    img_array = np.array(img)
-    
-    # 3. CRITICAL FIX: Force the array to be 8-bit unsigned integers
-    # This specifically fixes the "Unsupported image type" error
-    return img_array.astype(np.uint8)
+    img = Image.open(io.BytesIO(img_data)).convert('RGB')
+    return np.array(img).astype(np.uint8)
 
 @app.route('/get_face_encoding', methods=['POST'])
 def get_face_encoding():
     try:
         data = request.json
-        if not data or 'image' not in data:
-            return jsonify({"status": "error", "message": "No image provided"}), 400
-
         rgb_img = process_base64_image(data['image'])
         
-        # Detect faces
+        if not is_real_person(rgb_img):
+            return jsonify({"status": "error", "message": "Liveness check failed. Use a real face, not a photo."}), 400
+
         face_encodings = face_recognition.face_encodings(rgb_img)
-
         if len(face_encodings) > 0:
-            return jsonify({
-                "status": "success", 
-                "encoding": face_encodings[0].tolist()
-            })
-        else:
-            return jsonify({"status": "error", "message": "AI could not find a face. Try better lighting."}), 400
-
+            return jsonify({"status": "success", "encoding": face_encodings[0].tolist()})
+        return jsonify({"status": "error", "message": "No face detected."}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -58,10 +49,13 @@ def compare_faces():
     try:
         data = request.json
         live_rgb = process_base64_image(data['live_image'])
-        live_encodings = face_recognition.face_encodings(live_rgb)
         
+        if not is_real_person(live_rgb):
+            return jsonify({"status": "error", "message": "Anti-Spoofing: Photo detected!"}), 400
+
+        live_encodings = face_recognition.face_encodings(live_rgb)
         if not live_encodings:
-            return jsonify({"status": "error", "message": "No face detected in camera"}), 400
+            return jsonify({"status": "error", "message": "No face detected"}), 400
 
         known_faces = data['known_faces']
         for person in known_faces:
